@@ -1,0 +1,266 @@
+setwd("D:/AP/baging and  RF")
+
+df = read.csv("Churn.csv")
+
+head(df)
+
+### Check Class imbalance 
+
+table(df$Churn) ## freq table 
+
+prop.table(table( df$Churn) )
+
+### ignore the variable state, areacode and phone.num 
+names(df)
+library(dplyr)
+length(unique(df$State))
+df = df[ , -c( 19:21)]
+
+### find out variables that are higly correlated 
+str(df)
+cor(df)
+
+colnames(df)
+#### EDA to select the most important variables 
+
+df$Churn = as.factor( df$Churn)
+
+#### relationship b/w Churn and Day.charges 
+
+summary(df$Account.Length)
+
+df$Churn = ifelse( df$Churn == 1, "Yes", "No")
+library(ggplot2)
+
+ggplot(df, aes(Churn, Account.Length)) + geom_boxplot()
+
+ggplot( df, aes( Churn, Day.Charge)) + geom_boxplot()
+
+ggplot( df, aes( Churn, Eve.Charge)) + geom_boxplot()
+
+ggplot( df, aes( Churn, Night.Charge)) + geom_boxplot()
+
+ggplot(df, aes(Churn, CustServ.Calls)) + geom_boxplot()
+
+### cor of day charges with night and evening 
+
+cor(df$Day.Charge, df$Day.Mins)
+cor( df$Eve.Charge, df$Night.Charge)
+
+### explore with factor variables 
+df$Intl.Plan = as.factor(df$Intl.Plan)
+ggplot( df, aes(Intl.Plan, fill = Churn )) + geom_bar()
+
+ggplot( df, aes( Intl.Plan, fill = Churn)) + geom_bar()
+ggplot( df, aes( Intl.Plan, fill = Churn)) + geom_bar(position ="fill")
+### convert Vmailplan and Intl.plan to factor variables 
+
+df$VMail.Plan = as.factor(df$VMail.Plan)
+df$Intl.Plan = as.factor(df$Intl.Plan)
+
+table(df$VMail.Plan)
+## divide the dataset into training and test set 
+
+set.seed( 1234)
+ids = sample( nrow(df), nrow(df)*0.8)
+
+train = df[ ids,]
+test =  df[-ids,]
+
+
+#### build logistic regression model using glm 
+
+churn_model = glm(Churn ~ Account.Length + VMail.Plan + Intl.Plan+
+                     CustServ.Calls + Day.Charge + Eve.Charge, 
+                   data = train, 
+                   family="binomial")
+
+summary(churn_model)
+
+
+churn_model2 = glm( as.factor(Churn) ~  VMail.Plan + Intl.Plan+
+                     CustServ.Calls + Day.Charge + Eve.Charge + Night.Mins, 
+                   data = train, 
+                   family="binomial")
+
+summary(churn_model2)
+
+churn_model3 = glm( Churn ~  VMail.Plan + Intl.Plan+
+                      CustServ.Calls + Day.Charge + Eve.Charge , 
+                    data = train, 
+                    family="binomial")
+
+summary(churn_model3)
+
+summary(churn_model)
+summary(churn_model2)
+
+colnames(train)
+
+### Predict the test observations 
+
+test$pred = predict( churn_model , newdata = test, type="response")
+
+test$pred3 = predict( churn_model3 , newdata = test, type="response")
+##test$pred_class = predict(churn_model , newdata = test, type="link")
+
+test$pred_class = ifelse( test$pred >= 0.5, 1 , 0)
+
+test$pred_class3 = ifelse( test$pred3 >= 0.5, 1 , 0)
+### confusion matrix 
+table(test$pred_class3, test$Churn )
+
+
+table( test$Churn, test$pred_class )
+
+table(test$Churn,test$pred_class2 )
+(552+16)/667
+
+16/(16+83)
+16/(16+16)
+
+2*0.16*0.5/(0.16+0.5)
+## ROC graphs 
+
+library(ROCR)
+#install.packages("ROCR")
+### add the ROC graph of credit_model1 on the same plot 
+pred = prediction(test$pred , test$Churn)
+perf= performance(pred, "tpr","fpr")
+plot(perf)
+### Predictions from model2 
+## add the ROC graph 
+pred3 = prediction(test$pred3 , test$Churn)
+perf3= performance(pred3, "tpr","fpr")
+plot(perf3, add = T, colorize=T)
+### AUC for churn model 
+
+AUC_1 = performance(pred, measure = 'auc')@y.values[[1]]
+AUC_1
+
+AUC_3 = performance(pred3, measure = 'auc')@y.values[[1]]
+AUC_3
+
+
+### The model performance is not good 
+## improve the model performance 
+
+### precison vs Recall curve 
+
+library("DMwR")
+#install.packages("DMwR")
+PRcurve(test$pred3, test$Churn)
+
+
+
+### change the cutoff 
+
+test$pred_class2 = ifelse( test$pred >=0.3, 1, 0)
+
+table( test$pred_class2, test$Churn)
+64/(64+35)
+ 64/(64+99)
+ 
+ (510+40)/667
+ 
+ ### add few more variables to imporve the model performance 
+ names(df)
+ churn_model2 = glm(Churn ~  VMail.Message + Intl.Charge+
+                  CustServ.Calls + Night.Charge + Day.Charge + Eve.Charge, 
+                data =train, 
+                family = "binomial")
+ summary(churn_model)
+ summary(churn_model2)
+ 
+ ### predict using model2 
+ 
+ test$pred2 = predict( churn_model2, newdata = test, type = "response")
+
+ test$pred2 = ifelse( test$pred2 > 0.5, 1 , 0) 
+ 
+ ## confusion matrix 
+ 
+ table( test$pred2, test$Churn)
+ 
+ 
+ ### lets try to balance the training datset 
+  
+ train_1 = train[ train$Churn == 1,]
+ train_0 = train[ train$Churn == 0,]
+ 
+ ## select a random sample of 1000 obs from 0 
+ 
+ ids_0 = sample( nrow(train_0), nrow(train_0) * 0.4)
+ 
+ train_0_samp = train_0[ ids_0, ]
+ 
+ train1 = rbind( train_0_samp, train_1)
+ 
+ prop.table( table( train1$Churn))
+ 
+ ### retrain the model with train1 
+ 
+ 
+ churn_model_1 = glm( Churn ~ Account.Length + VMail.Plan + Intl.Plan+
+                      CustServ.Calls + Day.Charge + Eve.Charge, 
+                    data = train1, 
+
+                      family="binomial")
+ 
+ #### predcict the test 
+ 
+
+  test$pred_s = predict( churn_model_1, newdata = test, type="response")
+ 
+  test$pred_s_class = ifelse( test$pred_s >= 0.5, 1, 0)
+  
+  table( test$Churn, test$pred_s_class)
+  
+  41/(41+61)
+  
+  41/(41+58)
+  ### add the ROC graph of credit_model1 on the same plot 
+  pred = prediction(test$pred_s , test$Churn)
+  perf= performance(pred, "tpr","fpr")
+  plot(perf)
+  
+  ### AUC for churn model 
+  
+  AUC_1 = performance(pred, measure = 'auc')@y.values[[1]]
+  AUC_1
+  
+  
+  ### precison vs Recall curve 
+  
+  library("DMwR")
+  
+  PRcurve(test$pred, test$Churn)
+  
+  
+  #### variable selection by fwd, bwd approaches 
+  
+  model = glm( Churn ~ ., data = train1, family="binomial")
+  
+  model_a = step(model, method="forward")
+  
+  model_b = step(model, method="backward")
+  
+  model_ab = step(model, method="both")
+  
+  ### preformance of forward selection model 
+  
+  test$pred_fwd = predict( model_a, newdata = test, type="response")
+
+  test$pred_fwd_class = ifelse( test$pred_fwd >= 0.5, 1, 0)  
+  
+  table( test$Churn, test$pred_fwd_class)
+  
+  
+  ### backward selection method 
+  
+  model_b = step( model, method="backward")
+
+  #### hybrid selection 
+  
+  model_h = step(model, method="both")
+  
